@@ -1,0 +1,164 @@
+{% extends "blog/base.html" %}
+{% block content %}
+<div class="content-section"
+     data-canvas-id="{{ canvas_id }}"
+     data-canvas-cooldown="{{ canvas_cooldown }}">
+    <h2>{{ canvas.title }}</h2>
+    <div class="canvas-container">
+        <canvas id="pixelCanvas" 
+                width="{{ canvas.width }}" 
+                height="{{ canvas.height }}" 
+                style="width: 100%; max-width: 800px; border: 1px solid #ccc;">
+        </canvas>
+    </div>
+    
+    <div class="controls mt-3">
+        <input type="color" id="colorPicker" value="#000000">
+        <button id="placePixel" class="btn btn-primary">Place Pixel</button>
+        <span id="cooldown"></span>
+    </div>
+</div>
+
+<script>
+    // Récupération des données depuis les attributs data
+    const container = document.querySelector('.content-section');
+    const CANVAS_ID = container.dataset.canvasId;
+    const CANVAS_COOLDOWN = parseInt(container.dataset.canvasCooldown, 10);
+    const canvasElement = document.getElementById('pixelCanvas');
+    const ctx = canvasElement.getContext('2d');
+    const colorPicker = document.getElementById('colorPicker');
+    const placeButton = document.getElementById('placePixel');
+    const cooldownSpan = document.getElementById('cooldown');
+
+    let selectedX = -1;
+    let selectedY = -1;
+
+    // Fonction pour dessiner la grille
+    function drawGrid() {
+        const width = canvas.width;
+        const height = canvas.height;
+        
+        ctx.beginPath();
+        for (let x = 0; x <= width; x++) {
+            ctx.moveTo(x + 0.5, 0);
+            ctx.lineTo(x + 0.5, height);
+        }
+        for (let y = 0; y <= height; y++) {
+            ctx.moveTo(0, y + 0.5);
+            ctx.lineTo(width, y + 0.5);
+        }
+        ctx.strokeStyle = '#ddd';
+        ctx.stroke();
+    }
+
+    // Gestion du cooldown
+    let cooldownActive = false;
+    function startCooldown(seconds) {
+        cooldownActive = true;
+        placeButton.disabled = true;
+        
+        let remainingTime = seconds;
+        const updateCooldown = () => {
+            cooldownSpan.textContent = `Cooldown: ${remainingTime}s`;
+            if (remainingTime <= 0) {
+                cooldownActive = false;
+                placeButton.disabled = false;
+                cooldownSpan.textContent = 'Ready!';
+                return;
+            }
+            remainingTime--;
+            setTimeout(updateCooldown, 1000);
+        };
+        updateCooldown();
+    }
+
+    // Gestion des clics sur le canvas
+    canvas.addEventListener('click', function(e) {
+        if (cooldownActive) return;
+        
+        const rect = canvas.getBoundingClientRect();
+        const x = Math.floor((e.clientX - rect.left) / (rect.width / canvas.width));
+        const y = Math.floor((e.clientY - rect.top) / (rect.height / canvas.height));
+        
+        selectedX = x;
+        selectedY = y;
+        
+        // Montrer la sélection
+        drawCanvas();
+    });
+
+    // Fonction pour placer un pixel
+    placeButton.addEventListener('click', async function() {
+        if (selectedX === -1 || selectedY === -1 || cooldownActive) return;
+        
+        try {
+            const response = await fetch('/canvas/place_pixel/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    canvas_id: CANVAS_ID,
+                    x: selectedX,
+                    y: selectedY,
+                    color: colorPicker.value
+                })
+            });
+            
+            if (response.ok) {
+                // Pixel placé avec succès
+                drawPixel(selectedX, selectedY, colorPicker.value);
+                startCooldown(CANVAS_COOLDOWN);
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Error placing pixel');
+            }
+        } catch (error) {
+            console.error('Error placing pixel:', error);
+            alert('Error placing pixel. Please try again.');
+        }
+    });
+
+    // Fonction pour récupérer le cookie CSRF
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+
+    // Fonction pour dessiner un pixel
+    function drawPixel(x, y, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x, y, 1, 1);
+    }
+
+    // Initialisation
+    function initCanvas() {
+        // Charger les pixels existants
+        fetch(`/canvas/${CANVAS_ID}/pixels/`)
+            .then(response => response.json())
+            .then(pixels => {
+                pixels.forEach(pixel => {
+                    drawPixel(pixel.x, pixel.y, pixel.color);
+                });
+                drawGrid();
+            })
+            .catch(error => {
+                console.error('Error loading pixels:', error);
+            });
+    }
+
+    // Démarrer l'initialisation
+    initCanvas();
+</script>
+{% endblock content %}

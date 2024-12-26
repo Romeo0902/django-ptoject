@@ -1,0 +1,25 @@
+{% extends "blog/base.html" %}
+{% block content %}
+    <div class="content-section">
+        <h2>Active Canvases</h2>
+        <a class="btn btn-outline-info mb-4" href="{% url 'canvas:canvas-create' %}">Create New Canvas</a>
+        
+        <div class="row">
+            {% for canvas in canvases %}
+            <div class="col-md-4 mb-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ canvas.title }}</h5>
+                        <p class="card-text">
+                            Size: {{ canvas.width }}x{{ canvas.height }}<br>
+                            Cooldown: {{ canvas.cooldown }} seconds<br>
+                            Created by: {{ canvas.creator.username }}
+                        </p>
+                        <a href="{% url 'canvas:canvas-detail' canvas.pk %}" class="btn btn-primary">Join Canvas</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+{% endblock content %}
